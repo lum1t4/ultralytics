@@ -46,7 +46,14 @@ from .block import (
     RepNCSPELAN4,
     ResNetLayer,
     Silence,
+    RepVGGDW,
+    CIB,
+    C2fCIB,
+    Attention,
+    PSA,
+    SCDown,
 )
+
 from .conv import (
     CBAM,
     ChannelAttention,
@@ -135,4 +142,10 @@ __all__ = (
     "CBFuse",
     "CBLinear",
     "Silence",
+    "RepVGGDW",
+    "CIB",
+    "C2fCIB",
+    "Attention",
+    "PSA",
+    "SCDown",
 )
