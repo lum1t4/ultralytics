@@ -9,8 +9,8 @@ import torch
 from PIL import Image
 from torch.utils.data import dataloader, distributed
 
-from ultralytics.data.dataset import GroundingDataset, YOLODataset, YOLOMultiModalDataset
-from ultralytics.data.loaders import (
+from .dataset import GroundingDataset, YOLODataset, YOLOMultiModalDataset
+from .loaders import (
     LOADERS,
     LoadImagesAndVideos,
     LoadPilAndNumpy,

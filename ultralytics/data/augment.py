@@ -257,7 +257,6 @@ class Mosaic(BaseMixTransform):
             # Load image
             img = labels_patch["img"]
             h, w = labels_patch.pop("resized_shape")
-
             # Place img in img4
             if i == 0:  # top left
                 img4 = np.full((s * 2, s * 2, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
@@ -648,15 +647,21 @@ class RandomHSV:
 
     def __call__(self, labels):
         """
-        Applies random HSV augmentation to an image within the predefined limits.
+        Applies random HSV augmentation to a BGR or BGRA image within the predefined limits.
 
         The modified image replaces the original image in the input 'labels' dict.
         """
         img = labels["img"]
+        if img.shape[2] == 4:  # Check if image has alpha channel
+            bgr = img[:, :, :3]
+            alpha = img[:, :, 3]
+        else:
+            bgr = img
+
         if self.hgain or self.sgain or self.vgain:
             r = np.random.uniform(-1, 1, 3) * [self.hgain, self.sgain, self.vgain] + 1  # random gains
-            hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
-            dtype = img.dtype  # uint8
+            hue, sat, val = cv2.split(cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV))
+            dtype = bgr.dtype  # usually uint8
 
             x = np.arange(0, 256, dtype=r.dtype)
             lut_hue = ((x * r[0]) % 180).astype(dtype)
@@ -664,7 +669,13 @@ class RandomHSV:
             lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
 
             im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
-            cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=img)  # no return needed
+            transformed_bgr = cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR)
+
+            if img.shape[2] == 4:  # Re-add the alpha channel if original image had it
+                transformed_img = cv2.merge((transformed_bgr, alpha))
+            else:
+                transformed_img = transformed_bgr
+            labels["img"] = transformed_img  # Update the image in labels dictionary
         return labels
 
 
@@ -1000,6 +1011,7 @@ class Format:
         mask_overlap=True,
         batch_idx=True,
         bgr=0.0,
+        channels=3
     ):
         """Initializes the Format class with given parameters."""
         self.bbox_format = bbox_format
@@ -1011,6 +1023,7 @@ class Format:
         self.mask_overlap = mask_overlap
         self.batch_idx = batch_idx  # keep the batch indexes
         self.bgr = bgr
+        self.channels = channels
 
     def __call__(self, labels):
         """Return formatted image, classes, bounding boxes & keypoints to be used by 'collate_fn'."""
@@ -1057,7 +1070,11 @@ class Format:
         if len(img.shape) < 3:
             img = np.expand_dims(img, -1)
         img = img.transpose(2, 0, 1)
-        img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr else img)
+        if self.channels == 3:
+            img = np.ascontiguousarray(img[::-1] if random.uniform(0, 1) > self.bgr else img)
+        elif self.channels == 4:
+            # For RGBA, only reverse RGB channels if needed
+            img = np.ascontiguousarray(np.concatenate((img[:3][::-1] if random.uniform(0, 1) > self.bgr else img[:3], img[3:4])))
         img = torch.from_numpy(img)
         return img
 
@@ -1193,6 +1210,7 @@ def classify_transforms(
     std=DEFAULT_STD,
     interpolation=Image.BILINEAR,
     crop_fraction: float = DEFAULT_CROP_FRACTION,
+    channels=3
 ):
     """
     Classification transforms for evaluation/inference. Inspired by timm/data/transforms_factory.py.
@@ -1228,8 +1246,8 @@ def classify_transforms(
     tfl += [
         T.ToTensor(),
         T.Normalize(
-            mean=torch.tensor(mean),
-            std=torch.tensor(std),
+            mean=torch.tensor(mean + (0,) if channels == 4 else mean),
+            std=torch.tensor(std + (1,) if channels == 4 else std),
         ),
     ]
 
@@ -1252,6 +1270,7 @@ def classify_augmentations(
     force_color_jitter=False,
     erasing=0.0,
     interpolation=Image.BILINEAR,
+    channels=3,
 ):
     """
     Classification transforms with augmentation for training. Inspired by timm/data/transforms_factory.py.
@@ -1325,7 +1344,10 @@ def classify_augmentations(
 
     final_tfl = [
         T.ToTensor(),
-        T.Normalize(mean=torch.tensor(mean), std=torch.tensor(std)),
+        T.Normalize(
+            mean=torch.tensor(mean + (0,) if channels == 4 else mean),
+            std=torch.tensor(std + (1,) if channels == 4 else std),
+        ),
         T.RandomErasing(p=erasing, inplace=True),
     ]
 
@@ -1414,10 +1436,11 @@ class CenterCrop:
 class ToTensor:
     """YOLOv8 ToTensor class for image preprocessing, i.e., T.Compose([LetterBox(size), ToTensor()])."""
 
-    def __init__(self, half=False):
+    def __init__(self, half=False, channels=3):
         """Initialize YOLOv8 ToTensor object with optional half-precision support."""
         super().__init__()
         self.half = half
+        self.channels = channels
 
     def __call__(self, im):
         """
@@ -1429,8 +1452,11 @@ class ToTensor:
         Returns:
             (torch.Tensor): The transformed image as a PyTorch tensor in float32 or float16, normalized to [0, 1].
         """
-        im = np.ascontiguousarray(im.transpose((2, 0, 1))[::-1])  # HWC to CHW -> BGR to RGB -> contiguous
-        im = torch.from_numpy(im)  # to torch
-        im = im.half() if self.half else im.float()  # uint8 to fp16/32
-        im /= 255.0  # 0-255 to 0.0-1.0
+        if self.channels == 3:
+            im = np.ascontiguousarray(im.transpose((2, 0, 1))[::-1])  # HWC to CHW -> BGR to RGB -> contiguous
+        elif self.channels == 4:
+            im = np.ascontiguousarray(im.transpose((2, 0, 1)))  # HWC to CHW -> contiguous (keep RGBA order)
+        im = torch.from_numpy(im)
+        im = im.half() if self.half else im.float()
+        im /= 255.0
         return im

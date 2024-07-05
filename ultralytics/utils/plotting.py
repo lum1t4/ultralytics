@@ -788,7 +788,7 @@ def plot_images(
     masks=np.zeros(0, dtype=np.uint8),
     kpts=np.zeros((0, 51), dtype=np.float32),
     paths=None,
-    fname="images.jpg",
+    fname="images.webp",
     names=None,
     on_plot=None,
     max_subplots=16,
@@ -810,14 +810,14 @@ def plot_images(
         batch_idx = batch_idx.cpu().numpy()
 
     max_size = 1920  # max image size
-    bs, _, h, w = images.shape  # batch size, _, height, width
+    bs, channels, h, w = images.shape  # batch size, _, height, width
     bs = min(bs, max_subplots)  # limit plot images
     ns = np.ceil(bs**0.5)  # number of subplots (square)
     if np.max(images[0]) <= 1:
         images *= 255  # de-normalise (optional)
 
     # Build Image
-    mosaic = np.full((int(ns * h), int(ns * w), 3), 255, dtype=np.uint8)  # init
+    mosaic = np.full((int(ns * h), int(ns * w), channels), 255, dtype=np.uint8)  # init
     for i in range(bs):
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
         mosaic[y : y + h, x : x + w, :] = images[i].transpose(1, 2, 0)
