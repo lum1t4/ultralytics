@@ -32,11 +32,16 @@ overrides = {vars(trainer.args)}
 
 if __name__ == "__main__":
     from {module} import {name}
-    from ultralytics.utils import DEFAULT_CFG_DICT
-
+    from ultralytics.utils import DEFAULT_CFG_DICT, SETTINGS, RANK
     cfg = DEFAULT_CFG_DICT.copy()
     cfg.update(save_dir='')   # handle the extra key 'save_dir'
     trainer = {name}(cfg=cfg, overrides=overrides)
+    if RANK in {-1, 0} and SETTINGS["wandb"]:
+        try:
+            from wandb.integration.ultralytics import add_wandb_callback
+            add_wandb_callback(trainer.model, enable_model_checkpointing=trainer.args.save_period > 0)
+        except (ImportError, AssertionError):
+            wb = None
     results = trainer.train()
 """
     (USER_CONFIG_DIR / "DDP").mkdir(exist_ok=True)
