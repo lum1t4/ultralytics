@@ -136,7 +136,7 @@ def on_fit_epoch_end(trainer):
         "version": __version__,
     }
 
-    checkpint_parent = __path__ / f"{wb.run.id}"
+    checkpint_parent = trainer.wdir / f"{wb.run.id}"
     checkpint_parent.mkdir(parents=True, exist_ok=True)
     checkpoint_path = checkpint_parent / f"epoch{trainer.epoch}.pt"
     torch_save(checkpoint_dict, checkpoint_path, use_dill=True)
