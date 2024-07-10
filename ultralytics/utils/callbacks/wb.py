@@ -1,7 +1,10 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
 
-from ultralytics.utils import SETTINGS, TESTS_RUNNING
-from ultralytics.utils.torch_utils import model_info_for_loggers
+from ultralytics.utils import SETTINGS, TESTS_RUNNING, __version__
+from ultralytics.utils.torch_utils import model_info_for_loggers, de_parallel
+from ultralytics.utils.patches import torch_save
+import copy
+from datetime import datetime
 
 try:
     assert not TESTS_RUNNING  # do not log pytest
@@ -120,6 +123,27 @@ def on_fit_epoch_end(trainer):
     if trainer.epoch == 0:
         wb.run.log(model_info_for_loggers(trainer), step=trainer.epoch + 1)
 
+    model_checkpoint_artifact = wb.Artifact(f"run_{wb.run.id}_model", "model")
+    checkpoint_dict = {
+        "epoch": trainer.epoch,
+        "best_fitness": trainer.best_fitness,
+        "model": copy.deepcopy(de_parallel(trainer.model)).half(),
+        "ema": copy.deepcopy(trainer.ema.ema).half(),
+        "updates": trainer.ema.updates,
+        "optimizer": trainer.optimizer.state_dict(),
+        "train_args": vars(trainer.args),
+        "date": datetime.now().isoformat(),
+        "version": __version__,
+    }
+
+    checkpint_parent = __path__ / f"{wb.run.id}"
+    checkpint_parent.mkdir(parents=True, exist_ok=True)
+    checkpoint_path = checkpint_parent / f"epoch{trainer.epoch}.pt"
+    torch_save(checkpoint_dict, checkpoint_path, use_dill=True)
+    model_checkpoint_artifact.add_file(checkpoint_path)
+    wb.log_artifact(
+        model_checkpoint_artifact, aliases=[f"epoch_{trainer.epoch}"]
+    )
 
 def on_train_epoch_end(trainer):
     """Log metrics and save images at the end of each training epoch."""
