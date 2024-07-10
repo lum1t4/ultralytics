@@ -106,25 +106,3 @@ class YOLOWorld(Model):
         # self.predictor = None  # reset predictor otherwise old names remain
         if self.predictor:
             self.predictor.model.names = classes
-
-
-class YOLOI4(Model):
-    """YOLO (You Only Look Once) custom version to handle 4 channels images object detection model."""
-
-    def __init__(self, model="yolov8n.pt", task=None, verbose=False, ch=4):
-        """Initialize YOLO model, switching to YOLOWorld if model filename contains '-world'."""
-        path = Path(model)
-        super().__init__(model=model, task=task, verbose=verbose)
-        self.ch = ch
-
-    @property
-    def task_map(self):
-        """Map head to model, trainer, validator, and predictor classes."""
-        return {
-            "detect": {
-                "model": MultiChannelDetectionModel,
-                "trainer": yolo.detect.MultiChannelDetectionTrainer,
-                "validator": yolo.detect.DetectionValidator,
-                "predictor": yolo.detect.DetectionPredictor,
-            }
-        }

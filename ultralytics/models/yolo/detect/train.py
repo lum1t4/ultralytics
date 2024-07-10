@@ -128,7 +128,7 @@ class DetectionTrainer(BaseTrainer):
             cls=batch["cls"].squeeze(-1),
             bboxes=batch["bboxes"],
             paths=batch["im_file"],
-            fname=self.save_dir / f"train_batch{ni}.webp",
+            fname=self.save_dir / f"train_batch{ni}.png",
             on_plot=self.on_plot,
         )
 

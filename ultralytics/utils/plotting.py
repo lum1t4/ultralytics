@@ -788,7 +788,7 @@ def plot_images(
     masks=np.zeros(0, dtype=np.uint8),
     kpts=np.zeros((0, 51), dtype=np.float32),
     paths=None,
-    fname="images.webp",
+    fname="images.png",
     names=None,
     on_plot=None,
     max_subplots=16,

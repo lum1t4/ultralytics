@@ -435,6 +435,7 @@ def attempt_download_asset(file, repo="ultralytics/assets", release="v8.2.0", **
     else:
         # URL specified
         name = Path(parse.unquote(str(file))).name  # decode '%2F' to '/' etc.
+        print(name)
         download_url = f"https://github.com/{repo}/releases/download"
         if str(file).startswith(("http:/", "https:/")):  # download
             url = str(file).replace(":/", "://")  # Pathlib turns :// -> :/
